@@ -3,6 +3,20 @@ set -e
 
 cd "$(dirname "$0")"
 
+# 首先终止所有已运行的服务
+echo "杀死 cuzz_detector_server.py ..."
+pkill -f cuzz_detector_server.py || true
+
+echo "杀死 sse_server.js ..."
+pkill -f sse_server.js || true
+
+echo "杀死 Next.js ..."
+pkill -f "npm run dev" || true
+pkill -f "bun run dev" || true  # 增加对bun进程的终止
+
+echo "等待端口释放（3秒）..."
+sleep 3
+
 # 自动创建 uv 虚拟环境
 if [ ! -d ".venv" ]; then
   echo "未找到 .venv，正在用 uv 创建..."
@@ -36,6 +50,11 @@ if [ -d nextjs-cuzz ]; then
     echo "安装 Next.js 前端依赖..."
     bun install
   fi
+  
+  # 安装 kill-port 包
+  echo "安装 kill-port 包..."
+  bun add -d kill-port
+  
   bunx kill-port 3000 || true
   nohup bun run dev -- -p 3000 > ../nextjs-cuzz.log 2>&1 &
   echo "Next.js 前端已启动 (端口:3000)"
