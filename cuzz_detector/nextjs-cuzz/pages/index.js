@@ -15,8 +15,8 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     
-    // 连接SSE
-    const eventSource = new EventSource('http://localhost:3001/sse');
+    // 连接SSE - 通过Nginx代理
+    const eventSource = new EventSource('/sse');
     
     // 处理新消息
     eventSource.onmessage = (event) => {
