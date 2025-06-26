@@ -100,7 +100,7 @@ export default function Home() {
   
   // 分组后的反馈数据
   const groupedFeedback = groupFeedback();
-  
+
   return (
     <div className="container">
       <Head>
@@ -175,8 +175,8 @@ export default function Home() {
                           {item.feedback || '无内容'}
                         </div>
                       </li>
-                    ))}
-                  </ul>
+        ))}
+      </ul>
                 )}
               </div>
             ))
