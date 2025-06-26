@@ -1,8 +1,8 @@
-[06/26/25 20:42:35] INFO     Starting MCP server                  server.py:1297
+[06/26/25 20:53:06] INFO     Starting MCP server                  server.py:1297
                              'LLM用户情绪收集器' with transport                 
                              'streamable-http' on                               
                              http://0.0.0.0:10086/mcp/                          
-INFO:     Started server process [72026]
+INFO:     Started server process [75831]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:10086 (Press CTRL+C to quit)

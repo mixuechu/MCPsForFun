@@ -1,15 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  basePath: '/view',
-  async rewrites() {
-    return [
-      {
-        source: '/view/:path*',
-        destination: '/:path*',
-      }
-    ]
-  }
+  // 暂时移除可能导致冲突的配置
+  // basePath: '/view',
+  // async rewrites() {
+  //   return [
+  //     {
+  //       source: '/view/:path*',
+  //       destination: '/:path*',
+  //     }
+  //   ]
+  // }
 };
  
 module.exports = nextConfig; 
