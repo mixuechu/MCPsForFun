@@ -30,3 +30,14 @@ yarn-debug.log
 yarn-error.log
 .next/
 .next/**/node_modules/
+
+# Log files
+*.log
+logs/
+**/*.log
+
+# PID files
+*.pid
+**/*.pid
+
+nginx*.conf
