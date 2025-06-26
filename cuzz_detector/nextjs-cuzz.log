@@ -252,3 +252,4 @@ Error: ENOENT: no such file or directory, scandir '/Users/mimimi/Desktop/persona
   syscall: 'scandir',
   path: '/Users/mimimi/Desktop/personal_cave/galpha/mcp-servers-standalone/mcps_for_fun/cuzz_detector/nextjs-cuzz/pages'
 }
+[?25h

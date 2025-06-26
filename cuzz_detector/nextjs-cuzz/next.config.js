@@ -1,8 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  assetPrefix: '/view',
-  basePath: '/view'
+  basePath: '/view',
+  async rewrites() {
+    return [
+      {
+        source: '/view/:path*',
+        destination: '/:path*',
+      }
+    ]
+  }
 };
  
 module.exports = nextConfig; 
