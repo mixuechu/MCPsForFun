@@ -22,4 +22,4 @@ venv/
 --registry=https:/
 /--registry=https:/
 
-.next/
+.next/**/node_modules/
