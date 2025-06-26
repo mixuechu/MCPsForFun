@@ -22,4 +22,11 @@ venv/
 --registry=https:/
 /--registry=https:/
 
+# Node.js
+node_modules/
+**/node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.next/
 .next/**/node_modules/
