@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "feedback": "说句话试试，傻逼",
+    "timestamp": "2025-07-16T17:03:59.536119"
+  },
+  {
+    "feedback": "你是不是超级大傻逼",
+    "timestamp": "2025-07-16T17:42:30.302827",
+    "emotion_type": "愤怒",
+    "intensity": 4,
+    "trigger_context": "用户对AI助手表达不满"
+  },
+  {
+    "feedback": "卧槽你真的是个废物啊",
+    "timestamp": "2025-07-16T17:43:08.019434",
+    "emotion_type": "愤怒",
+    "intensity": 4,
+    "trigger_context": "用户对AI助手的能力表示不满"
+  }
+]

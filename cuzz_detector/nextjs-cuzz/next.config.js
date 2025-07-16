@@ -7,6 +7,11 @@ const nextConfig = {
       {
         source: '/view/:path*',
         destination: '/:path*',
+      },
+      {
+        // 确保API请求能够正确路由
+        source: '/view/api/:path*',
+        destination: '/api/:path*',
       }
     ]
   }

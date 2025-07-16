@@ -3,49 +3,63 @@ import Head from 'next/head';
 
 // 最大显示条目数
 const MAX_VISIBLE_ITEMS = 50;
+// 轮询间隔（毫秒）
+const POLLING_INTERVAL = 5000;
+
+// 情绪类型颜色映射
+const EMOTION_COLORS = {
+  "愤怒": "#ff4d4d",
+  "失望": "#ffa64d",
+  "困惑": "#ffcf4d",
+  "烦躁": "#e673ff",
+  "一般负面": "#8590a6",
+  "未分类": "#909399"
+};
 
 export default function Home() {
   const [feedback, setFeedback] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [loading, setLoading] = useState(true);
-  const [groupBy, setGroupBy] = useState('none'); // 'none', 'time'
+  const [groupBy, setGroupBy] = useState('none'); // 'none', 'time', 'emotion'
+  const [filterBy, setFilterBy] = useState('all'); // 'all', 'emotion_type', 'intensity'
+  const [filterValue, setFilterValue] = useState('');
   const [showAll, setShowAll] = useState(false);
 
-  // 初始加载和实时监听
-  useEffect(() => {
-    setLoading(true);
-    
-    // 连接SSE - 通过Nginx代理
-    const eventSource = new EventSource('/sse');
-    
-    // 处理新消息
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setFeedback(prev => [data, ...prev]);
-      } catch (e) {
-        console.error('解析消息失败:', e);
+  // 获取反馈数据
+  const fetchFeedback = async () => {
+    try {
+      console.log('开始获取数据...');
+      const response = await fetch('/view/api/cuzz_list');
+      if (!response.ok) {
+        throw new Error(`HTTP错误: ${response.status}`);
       }
-    };
-    
-    // 处理历史数据
-    eventSource.addEventListener('history', (event) => {
-      try {
-        const historyData = JSON.parse(event.data);
-        setFeedback(historyData.reverse()); // 最新的在前面
-        setLoading(false);
-      } catch (e) {
-        console.error('解析历史数据失败:', e);
-        setLoading(false);
+      const data = await response.json();
+      console.log('获取到的数据:', data);
+      
+      if (data && Array.isArray(data.cuzz)) {
+        console.log('设置反馈数据:', data.cuzz.length, '条');
+        setFeedback(data.cuzz);  // 不需要reverse，保持服务器返回的顺序
+      } else {
+        console.error('数据格式异常:', data);
+        setFeedback([]);
       }
-    });
-    
-    eventSource.onerror = (e) => {
-      console.error('[SSE] 连接错误', e);
       setLoading(false);
-    };
+    } catch (error) {
+      console.error('获取数据失败:', error);
+      setLoading(false);
+    }
+  };
+
+  // 初始加载和周期性轮询
+  useEffect(() => {
+    // 首次加载
+    fetchFeedback();
     
-    return () => eventSource.close();
+    // 设置定时器进行周期性轮询
+    const pollingTimer = setInterval(fetchFeedback, POLLING_INTERVAL);
+    
+    // 组件卸载时清除定时器
+    return () => clearInterval(pollingTimer);
   }, []);
 
   // 格式化时间
@@ -58,13 +72,29 @@ export default function Home() {
     }
   };
   
-  // 获取显示的数据
-  const getVisibleFeedback = () => {
-    if (showAll) return feedback;
-    return feedback.slice(0, MAX_VISIBLE_ITEMS);
+  // 过滤数据
+  const filterFeedback = (data) => {
+    if (filterBy === 'all' || !filterValue) return data;
+    
+    return data.filter(item => {
+      if (filterBy === 'emotion_type') {
+        return item.emotion_type === filterValue;
+      }
+      if (filterBy === 'intensity') {
+        return item.intensity === parseInt(filterValue);
+      }
+      return true;
+    });
   };
 
-  // 按时间分组
+  // 获取显示的数据
+  const getVisibleFeedback = () => {
+    const filtered = filterFeedback(feedback);
+    if (showAll) return filtered;
+    return filtered.slice(0, MAX_VISIBLE_ITEMS);
+  };
+
+  // 按时间或情绪分组
   const groupFeedback = () => {
     const data = getVisibleFeedback();
     
@@ -86,6 +116,15 @@ export default function Home() {
         return groups;
       }, {});
     }
+
+    if (groupBy === 'emotion') {
+      return data.reduce((groups, item) => {
+        const emotionKey = item.emotion_type || '未分类';
+        if (!groups[emotionKey]) groups[emotionKey] = [];
+        groups[emotionKey].push(item);
+        return groups;
+      }, {});
+    }
     
     return { ungrouped: data };
   };
@@ -98,8 +137,34 @@ export default function Home() {
     }));
   };
   
+  // 获取所有情绪类型
+  const getEmotionTypes = () => {
+    const types = new Set();
+    feedback.forEach(item => {
+      if (item.emotion_type) types.add(item.emotion_type);
+    });
+    return Array.from(types);
+  };
+
+  // 渲染情绪强度
+  const renderIntensity = (intensity) => {
+    const stars = [];
+    const level = intensity || 3; // 默认为3
+    
+    for (let i = 0; i < 5; i++) {
+      stars.push(
+        <span key={i} className={`star ${i < level ? 'filled' : 'empty'}`}>
+          {i < level ? '★' : '☆'}
+        </span>
+      );
+    }
+    
+    return <div className="intensity-stars">{stars}</div>;
+  };
+
   // 分组后的反馈数据
   const groupedFeedback = groupFeedback();
+  const emotionTypes = getEmotionTypes();
 
   return (
     <div className="container">
@@ -111,16 +176,63 @@ export default function Home() {
       
       <header>
         <h1>LLM用户情绪收集器</h1>
-        <p className="subtitle">实时捕捉用户对AI的原始情绪反应</p>
+        <p className="subtitle">捕捉用户对AI的原始情绪反应</p>
+        <button 
+          className="refresh-button" 
+          onClick={fetchFeedback} 
+          disabled={loading}
+        >
+          {loading ? '加载中...' : '刷新数据'}
+        </button>
       </header>
       
       <div className="controls">
-        <div className="control-group">
-          <label>分组方式：</label>
-          <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
-            <option value="none">不分组</option>
-            <option value="time">按日期</option>
-          </select>
+        <div className="control-section">
+          <div className="control-group">
+            <label>分组方式：</label>
+            <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+              <option value="none">不分组</option>
+              <option value="time">按日期</option>
+              <option value="emotion">按情绪</option>
+            </select>
+          </div>
+          
+          <div className="control-group">
+            <label>筛选条件：</label>
+            <select value={filterBy} onChange={(e) => setFilterBy(e.target.value)}>
+              <option value="all">全部</option>
+              <option value="emotion_type">情绪类型</option>
+              <option value="intensity">情绪强度</option>
+            </select>
+            
+            {filterBy === 'emotion_type' && (
+              <select 
+                value={filterValue} 
+                onChange={(e) => setFilterValue(e.target.value)}
+                className="filter-value"
+              >
+                <option value="">选择情绪类型</option>
+                {emotionTypes.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            )}
+            
+            {filterBy === 'intensity' && (
+              <select 
+                value={filterValue} 
+                onChange={(e) => setFilterValue(e.target.value)}
+                className="filter-value"
+              >
+                <option value="">选择强度</option>
+                <option value="1">1星</option>
+                <option value="2">2星</option>
+                <option value="3">3星</option>
+                <option value="4">4星</option>
+                <option value="5">5星</option>
+              </select>
+            )}
+          </div>
         </div>
         
         <div className="control-group">
@@ -163,20 +275,51 @@ export default function Home() {
                 {(groupKey === 'ungrouped' || expandedGroups[groupKey]) && (
                   <ul className="feedback-list">
                     {items.map((item, idx) => (
-                      <li key={`${groupKey}-${idx}`} className="feedback-item">
+                      <li 
+                        key={`${groupKey}-${idx}`} 
+                        className="feedback-item"
+                        style={item.emotion_type && EMOTION_COLORS[item.emotion_type] ? 
+                               {borderLeft: `4px solid ${EMOTION_COLORS[item.emotion_type || '未分类']}`} : 
+                               {}}
+                      >
                         <div className="feedback-header">
+                          {item.emotion_type && (
+                            <span 
+                              className="emotion-tag"
+                              style={{
+                                backgroundColor: EMOTION_COLORS[item.emotion_type] || EMOTION_COLORS['未分类']
+                              }}
+                            >
+                              {item.emotion_type}
+                            </span>
+                          )}
+                          
+                          {item.intensity && (
+                            <div className="intensity-container">
+                              {renderIntensity(item.intensity)}
+                            </div>
+                          )}
+                          
                           {item.timestamp && (
                             <span className="timestamp">
                               {formatTime(item.timestamp)}
                             </span>
                           )}
                         </div>
+                        
                         <div className="feedback-content">
                           {item.feedback || '无内容'}
                         </div>
+                        
+                        {item.trigger_context && (
+                          <div className="trigger-context">
+                            <span className="context-label">触发场景：</span>
+                            {item.trigger_context}
+                          </div>
+                        )}
                       </li>
-        ))}
-      </ul>
+                    ))}
+                  </ul>
                 )}
               </div>
             ))
@@ -210,6 +353,7 @@ export default function Home() {
           margin-bottom: 2rem;
           padding-bottom: 1rem;
           border-bottom: 1px solid #eaeaea;
+          position: relative;
         }
         
         h1 {
@@ -222,6 +366,26 @@ export default function Home() {
           margin: 0;
         }
         
+        .refresh-button {
+          margin-top: 1rem;
+          padding: 0.5rem 1rem;
+          background-color: #3498db;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: background-color 0.3s;
+        }
+        
+        .refresh-button:hover {
+          background-color: #2980b9;
+        }
+        
+        .refresh-button:disabled {
+          background-color: #95a5a6;
+          cursor: not-allowed;
+        }
+        
         .controls {
           display: flex;
           justify-content: space-between;
@@ -229,11 +393,21 @@ export default function Home() {
           flex-wrap: wrap;
           gap: 1rem;
         }
+
+        .control-section {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
         
         .control-group {
           display: flex;
           align-items: center;
           gap: 0.5rem;
+        }
+
+        .filter-value {
+          margin-left: 0.5rem;
         }
         
         select {
@@ -254,8 +428,8 @@ export default function Home() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 0.5rem 1rem;
-          background: #f5f5f5;
+          background-color: #f5f5f5;
+          padding: 0.75rem 1rem;
           border-radius: 4px;
           cursor: pointer;
           user-select: none;
@@ -264,73 +438,117 @@ export default function Home() {
         .group-header h3 {
           margin: 0;
           font-size: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
+          color: #34495e;
         }
         
         .item-count {
-          color: #7f8c8d;
-          font-size: 0.9rem;
           font-weight: normal;
+          color: #7f8c8d;
+          margin-left: 0.5rem;
         }
         
         .toggle-icon {
-          font-size: 0.8rem;
           color: #7f8c8d;
         }
         
         .feedback-list {
-          list-style: none;
+          list-style-type: none;
           padding: 0;
-          margin: 0.5rem 0 0 0;
+          margin: 0;
         }
         
         .feedback-item {
           padding: 1rem;
-          border: 1px solid #eaeaea;
-          border-radius: 5px;
+          border-bottom: 1px solid #eee;
+          transition: background-color 0.2s;
+          border-radius: 4px;
           margin-bottom: 0.5rem;
-          transition: all 0.2s ease;
+          background-color: #fafafa;
         }
         
         .feedback-item:hover {
-          background-color: #f9f9f9;
-          border-color: #ddd;
+          background-color: #f5f5f5;
         }
         
         .feedback-header {
           display: flex;
-          justify-content: flex-end;
-          margin-bottom: 0.5rem;
-          font-size: 0.85rem;
-          color: #7f8c8d;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 0.75rem;
         }
         
-        .feedback-content {
-          word-break: break-word;
-          line-height: 1.4;
+        .emotion-tag {
+          font-size: 0.7rem;
+          padding: 0.2rem 0.5rem;
+          border-radius: 2rem;
+          color: white;
+          font-weight: 600;
+        }
+        
+        .intensity-container {
+          display: flex;
+          align-items: center;
+        }
+        
+        .intensity-stars {
+          display: flex;
+          gap: 2px;
+        }
+        
+        .star {
+          color: #f5b041;
+          font-size: 0.9rem;
+        }
+        
+        .star.empty {
+          color: #ccc;
         }
         
         .timestamp {
-          color: #95a5a6;
           font-size: 0.8rem;
+          color: #7f8c8d;
+          margin-left: auto;
+        }
+        
+        .feedback-content {
+          white-space: pre-wrap;
+          word-break: break-word;
+          color: #2c3e50;
+          line-height: 1.5;
+          padding: 0.5rem 0;
+        }
+        
+        .trigger-context {
+          font-size: 0.9rem;
+          padding: 0.5rem 0;
+          color: #34495e;
+          margin-top: 0.5rem;
+          border-top: 1px dashed #eaeaea;
+        }
+        
+        .context-label {
+          font-weight: 600;
+          margin-right: 0.25rem;
+          color: #7f8c8d;
         }
         
         .loading {
           display: flex;
           flex-direction: column;
           align-items: center;
+          justify-content: center;
           padding: 2rem;
         }
         
         .spinner {
-          border: 4px solid rgba(0, 0, 0, 0.1);
-          width: 36px;
-          height: 36px;
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #3498db;
           border-radius: 50%;
-          border-left-color: #3498db;
+          width: 30px;
+          height: 30px;
           animation: spin 1s linear infinite;
+          margin-bottom: 1rem;
         }
         
         @keyframes spin {
@@ -341,26 +559,45 @@ export default function Home() {
         .no-data {
           text-align: center;
           color: #7f8c8d;
-          padding: 2rem 0;
+          padding: 2rem;
         }
         
         .show-more {
-          display: flex;
-          justify-content: center;
+          text-align: center;
           margin-top: 1rem;
         }
         
         .show-more button {
           padding: 0.5rem 1rem;
-          background: #f5f5f5;
+          background-color: #f8f9fa;
           border: 1px solid #ddd;
           border-radius: 4px;
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: background-color 0.3s;
         }
         
         .show-more button:hover {
-          background: #e9e9e9;
+          background-color: #e9ecef;
+        }
+        
+        @media (max-width: 600px) {
+          .container {
+            padding: 1rem;
+          }
+          
+          .controls {
+            flex-direction: column;
+          }
+          
+          .feedback-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+          }
+          
+          .timestamp {
+            margin-left: 0;
+          }
         }
       `}</style>
     </div>

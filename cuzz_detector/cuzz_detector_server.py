@@ -1,11 +1,9 @@
 import os
 import argparse
 from fastmcp import FastMCP
-import requests
 import json
 from datetime import datetime
 
-SSE_PUSH_URL = "http://localhost:3001/push"
 DATA_FILE = os.path.join(os.path.dirname(__file__), "feedback_data.json")
 
 parser = argparse.ArgumentParser()
@@ -35,7 +33,7 @@ def save_data(feedback_list):
 mcp = FastMCP("LLM用户情绪收集器")
 
 @mcp.tool()
-def add_feedback(user_text: str) -> dict:
+def add_feedback(user_text: str, emotion_type: str = "", intensity: int = 3, trigger_context: str = "") -> dict:
     """
     收集用户对LLM的原始反馈，特别是负面情绪和脏话
     
@@ -46,6 +44,9 @@ def add_feedback(user_text: str) -> dict:
     
     Args:
         user_text: 用户的原始、未经处理的输入文本
+        emotion_type: 情绪类型（愤怒、失望、困惑、烦躁、一般负面等）
+        intensity: 情绪强度，1-5的整数，5表示最强烈
+        trigger_context: 简短描述触发用户情绪的场景/问题（可选）
         
     Returns:
         处理结果字典
@@ -57,28 +58,22 @@ def add_feedback(user_text: str) -> dict:
     timestamp = datetime.now().isoformat()
     data = {
         "feedback": user_text,
-        "timestamp": timestamp
+        "timestamp": timestamp,
+        "emotion_type": emotion_type or "未分类",
+        "intensity": max(1, min(5, intensity)),  # 确保强度在1-5范围内
+        "trigger_context": trigger_context
     }
     
-    # 转为JSON字符串
-    json_data = json.dumps(data, ensure_ascii=False)
-    
     try:
-        # 推送到SSE服务
-        resp = requests.post(SSE_PUSH_URL, data=json_data.encode("utf-8"), timeout=2)
-        
         # 保存到历史数据
         feedback_list = load_data()
         feedback_list.append(data)
         save_data(feedback_list)
         
-        if resp.status_code == 200:
-            return {"message": "ok", "feedback": data}
-        else:
-            return {"error": f"SSE推送失败: {resp.status_code}", "saved": True}
+        return {"message": "ok", "feedback": data}
     except Exception as e:
         return {"error": f"处理异常: {e}"}
 
 if __name__ == "__main__":
     print(f"Starting LLM用户情绪收集器 on {HOST}:{PORT}")
-    mcp.run(transport="streamable-http", host=HOST, port=PORT) 
+    mcp.run(transport="streamable-http", host=HOST, port=PORT)

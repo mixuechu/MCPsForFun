@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import http from 'http';
 
 export const config = {
   api: {
@@ -8,62 +7,46 @@ export const config = {
   },
 };
 
-const filePath = path.resolve(process.cwd(), '../cuzz_list.txt');
+// 修正数据文件路径
+const dataFilePath = path.resolve(process.cwd(), '../feedback_data.json');
+console.log('数据文件路径:', dataFilePath);
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
-    let lines = [];
-    if (fs.existsSync(filePath)) {
-      lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
-    }
-    res.status(200).json({ cuzz: lines });
-    return;
-  } else if (req.method === 'POST') {
     try {
-      const text = (req.body && req.body.text) ? req.body.text.trim() : '';
-      if (!text) {
-        res.status(400).json({ success: false, error: 'text不能为空', debug: req.body });
-        return;
+      // 检查文件是否存在
+      if (!fs.existsSync(dataFilePath)) {
+        console.log('数据文件不存在:', dataFilePath);
+        return res.status(200).json({ cuzz: [] });
       }
-      // 直接转发到 4000 端口的 /push
-      const postData = JSON.stringify({ text });
-      const options = {
-        hostname: 'localhost',
-        port: 4000,
-        path: '/push',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData),
-        },
-      };
-      const forwardReq = http.request(options, forwardRes => {
-        let data = '';
-        forwardRes.on('data', chunk => data += chunk);
-        forwardRes.on('end', () => {
-          try {
-            const result = JSON.parse(data);
-            res.status(forwardRes.statusCode || 200).json(result);
-          } catch (e) {
-            res.status(502).json({ success: false, error: 'SSE服务响应异常', debug: data });
-          }
-        });
-      });
-      forwardReq.on('error', err => {
-        res.status(502).json({ success: false, error: '无法连接 SSE 服务', debug: err.message });
-      });
-      forwardReq.write(postData);
-      forwardReq.end();
-    } catch (e) {
-      res.status(400).json({ success: false, error: e.message, debug: req.body });
-      return;
+
+      // 读取文件内容
+      const rawData = fs.readFileSync(dataFilePath, 'utf-8');
+      console.log('读取到的原始数据:', rawData);
+      let feedbackData = [];
+
+      try {
+        feedbackData = JSON.parse(rawData);
+        console.log('解析后的数据:', feedbackData);
+      } catch (error) {
+        console.error('解析JSON数据失败:', error);
+      }
+
+      // 返回数据
+      return res.status(200).json({ cuzz: feedbackData });
+    } catch (error) {
+      console.error('读取文件失败:', error);
+      return res.status(500).json({ error: '服务器内部错误', message: error.message });
     }
+  } else if (req.method === 'POST') {
+    // 不再需要转发，直接返回成功
+    res.status(200).json({ success: true, message: '数据更新将在下次轮询时获取' });
   } else if (req.method === 'OPTIONS') {
     res.setHeader('Allow', 'GET,POST,OPTIONS');
     res.status(204).end();
     return;
   } else {
-    res.status(405).end();
+    res.status(405).json({ error: '方法不允许' });
     return;
   }
 } 
