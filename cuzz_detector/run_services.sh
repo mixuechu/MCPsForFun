@@ -155,41 +155,50 @@ stop_existing_services() {
 start_services() {
   print_color "\n=== 启动LLM用户情绪收集系统 ==="
   
-  # 启动MCP服务器 (后台运行)
+  # 创建日志目录
+  mkdir -p logs
+  
+  # 启动MCP服务器 (持久化运行)
   print_color "\n[1/2] 启动MCP服务器..."
-  python3 cuzz_detector_server.py &
+  nohup python3 cuzz_detector_server.py > logs/mcp_server.log 2>&1 &
   MCP_PID=$!
   echo $MCP_PID > .mcp_pid
   print_color "MCP服务器已启动，进程ID: $MCP_PID (http://localhost:10086)"
+  print_color "日志保存在: $(pwd)/logs/mcp_server.log"
   
   # 等待MCP服务器启动
   sleep 2
   
-  # 启动NextJS前端 (后台运行)
+  # 启动NextJS前端 (持久化运行)
   print_color "\n[2/2] 启动NextJS前端..."
   cd nextjs-cuzz
   
   # 检查包管理器并启动
   if command -v npm &> /dev/null; then
-    npm run dev &
+    nohup npm run dev > ../logs/nextjs.log 2>&1 &
+    NEXTJS_PID=$!
   elif command -v yarn &> /dev/null; then
-    yarn dev &
+    nohup yarn dev > ../logs/nextjs.log 2>&1 &
+    NEXTJS_PID=$!
   elif command -v bun &> /dev/null; then
-    bun run dev &
+    nohup bun run dev > ../logs/nextjs.log 2>&1 &
+    NEXTJS_PID=$!
   else
     print_error "未找到npm、yarn或bun。无法启动NextJS前端。"
     cd ..
     exit 1
   fi
   
-  NEXTJS_PID=$!
   cd ..
   echo $NEXTJS_PID > .nextjs_pid
   print_color "NextJS前端已启动，进程ID: $NEXTJS_PID (http://localhost:3000/view)"
+  print_color "日志保存在: $(pwd)/logs/nextjs.log"
   
-  print_color "\n=== 全部服务已启动 ==="
+  print_success "\n=== 全部服务已持久化启动 ==="
+  print_success "服务将在后台运行，即使关闭终端也会继续运行"
   print_color "访问地址: http://localhost:3000/view"
-  print_color "按 Ctrl+C 停止所有服务\n"
+  print_color "使用 '$0 stop' 命令可以停止所有服务"
+  print_color "使用 '$0 status' 命令可以查看服务状态\n"
 }
 
 # 函数：检查服务状态
@@ -314,8 +323,8 @@ case "${1:-start}" in
     install_dependencies
     stop_existing_services
     start_services
-    # 保持脚本运行
-    wait
+    # 不再使用wait命令，让脚本立即结束，服务继续在后台运行
+    print_color "启动完成，脚本将退出，服务会在后台持续运行"
     ;;
     
   stop)
@@ -326,8 +335,8 @@ case "${1:-start}" in
   restart)
     stop_existing_services
     start_services
-    # 保持脚本运行
-    wait
+    # 不再使用wait命令
+    print_color "重启完成，脚本将退出，服务会在后台持续运行"
     ;;
     
   status)
